@@ -124,15 +124,15 @@ func readResponse(port *serial.Port) ([]byte, error) {
 		return nil, fmt.Errorf("Response verification failed")
 	}
 
-	if buf[3] != 0x00 {
+	if len(buf) == 4 && buf[3] != 0x00 {
 		return nil, nil // TODO Ack
 	}
 
-	if buf[3] != 0xFF {
+	if len(buf) == 4 && buf[3] != 0xFF {
 		return nil, fmt.Errorf("Nack")
 	}
 
-	if buf[3] != 0x30 {
+	if len(buf) == 4 && buf[3] != 0x30 {
 		return nil, fmt.Errorf("Illegal command")
 	}
 
