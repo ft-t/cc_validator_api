@@ -136,7 +136,7 @@ func readResponse(port *serial.Port) ([]byte, error) {
 		return nil, fmt.Errorf("Illegal command")
 	}
 
-	buf = buf[4:]
+	buf = buf[3:]
 
 	return buf, nil
 }
