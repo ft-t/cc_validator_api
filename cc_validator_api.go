@@ -1,4 +1,4 @@
-package sl500_api
+package cc_validator_api
 
 import (
 	"bytes"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/howeyc/crc16"
 	"github.com/tarm/serial"
 )
 
@@ -38,10 +37,11 @@ func NewConnection(path string, baud Baud) (CCValidator, error) {
 	res.config = c
 	res.port = o
 
-	_, err = res.Reset()
-	if err != nil {
-		return res, err
-	}
+	//_,err = res.Reset()
+	//
+	//if err != nil {
+	//	return res, err
+	//}
 
 	return res, nil
 }
@@ -66,9 +66,24 @@ func (s *CCValidator) Poll() ([]byte, error) {
 	return readResponse(s.port)
 }
 
+func (s *CCValidator) Identification() ([]byte, error) {
+	sendRequest(s.port, 0x37, []byte{})
+	return readResponse(s.port)
+}
+
+func (s *CCValidator) GetBillTable() ([]byte, error) {
+	sendRequest(s.port, 0x41, []byte{})
+	return readResponse(s.port)
+}
+
+
 func (s *CCValidator) Ack() ([]byte, error) {
 	sendRequest(s.port, 0x00, []byte{})
 	return readResponse(s.port)
+}
+
+func Ack(port *serial.Port) {
+	sendRequest(port, 0x00, []byte{})
 }
 
 func (s *CCValidator) Nack() ([]byte, error) {
@@ -82,7 +97,7 @@ func readResponse(port *serial.Port) ([]byte, error) {
 
 	totalRead := 0
 	readTriesCount := 0
-	maxReadCount := 50
+	maxReadCount := 1050
 
 	for ; ; {
 		readTriesCount += 1
@@ -114,34 +129,38 @@ func readResponse(port *serial.Port) ([]byte, error) {
 		return nil, fmt.Errorf("Response format invalid")
 	}
 
-	crc := binary.BigEndian.Uint16(buf[len(buf)-2:])
+	crc := binary.LittleEndian.Uint16(buf[len(buf)-2:])
 
 	buf = buf[:len(buf)-2]
 
-	crc2 := crc16.ChecksumCCITT(buf)
+	crc2 := GetCRC16(buf)
 
 	if crc != crc2 {
 		return nil, fmt.Errorf("Response verification failed")
 	}
 
-	if len(buf) == 4 && buf[3] != 0x00 {
+	if len(buf) == 4 && buf[3] == 0x00 {
+		fmt.Printf("<- %X\n",buf)
 		return nil, nil // TODO Ack
 	}
 
-	if len(buf) == 4 && buf[3] != 0xFF {
+	if len(buf) == 4 && buf[3] == 0xFF {
 		return nil, fmt.Errorf("Nack")
 	}
 
-	if len(buf) == 4 && buf[3] != 0x30 {
+	if len(buf) == 4 && buf[3] == 0x30 {
 		return nil, fmt.Errorf("Illegal command")
 	}
 
 	buf = buf[3:]
 
+	fmt.Printf("<- %X\n",buf)
+	Ack(port)
+
 	return buf, nil
 }
 
-func sendRequest(port *serial.Port, commandCode int16, bytesData ...[]byte) {
+func sendRequest(port *serial.Port, commandCode byte, bytesData ...[]byte) {
 	buf := new(bytes.Buffer)
 
 	length := 6
@@ -150,18 +169,36 @@ func sendRequest(port *serial.Port, commandCode int16, bytesData ...[]byte) {
 		length += len(b)
 	}
 
-	binary.Write(buf, binary.BigEndian, StartCode)
-	binary.Write(buf, binary.BigEndian, PeripheralAddress)
-	binary.Write(buf, binary.BigEndian, byte(length))
-	binary.Write(buf, binary.BigEndian, commandCode)
+	binary.Write(buf, binary.LittleEndian, StartCode)
+	binary.Write(buf, binary.LittleEndian, PeripheralAddress)
+	binary.Write(buf, binary.LittleEndian, byte(length))
+	binary.Write(buf, binary.LittleEndian, commandCode)
 
 	for _, data := range bytesData {
-		binary.Write(buf, binary.BigEndian, data)
+		binary.Write(buf, binary.LittleEndian, data)
 	}
 
-	crc := crc16.ChecksumCCITT(buf.Bytes())
+	crc := GetCRC16(buf.Bytes())
 
-	binary.Write(buf, binary.BigEndian, crc)
+	binary.Write(buf, binary.LittleEndian, crc)
+	fmt.Printf("-> %X\n",buf.Bytes())
 
 	port.Write(buf.Bytes())
+}
+
+func GetCRC16(bufData []byte) uint16 {
+	CRC := uint16(0)
+	for i := 0; i < len(bufData); i++ {
+		TmpCRC := CRC ^ uint16(bufData[i])
+		for j := 0; j < 8; j++ {
+			if (TmpCRC & 0x0001) > 0 {
+				TmpCRC >>= 1
+				TmpCRC ^= 0x08408
+			} else {
+				TmpCRC >>= 1
+			}
+		}
+		CRC = TmpCRC
+	}
+	return CRC
 }
