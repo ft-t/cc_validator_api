@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/tarm/serial"
@@ -73,6 +74,17 @@ const (
 	CapacitanceCanalFailure      byte = 0x5F
 )
 
+type Identification struct {
+	PartNumber   string
+	SerialNumber string
+	AssetNumber  []byte
+}
+
+type Bill struct {
+	Denomination float64
+	CountryCode  string
+}
+
 type CCValidator struct {
 	config *serial.Config
 	port   *serial.Port
@@ -100,9 +112,10 @@ func NewConnection(path string, baud Baud) (CCValidator, error) {
 	return res, nil
 }
 
-func (s *CCValidator) Reset() ([]byte, error) {
+func (s *CCValidator) Reset() error {
 	sendRequest(s.port, 0x30, []byte{})
-	return readResponse(s.port)
+	_, err := readResponse(s.port)
+	return err
 }
 
 func (s *CCValidator) GetStatus() ([]byte, error) {
@@ -127,14 +140,68 @@ func (s *CCValidator) Poll() (Status, byte, error) {
 	return Status(response[0]), param, err
 }
 
-func (s *CCValidator) Identification() ([]byte, error) {
+func (s *CCValidator) Identification() (Identification, error) {
 	sendRequest(s.port, 0x37, []byte{})
-	return readResponse(s.port)
+	response, err := readResponse(s.port)
+
+	if err != nil {
+		return Identification{}, err
+	}
+
+	return Identification{
+		PartNumber:   string(response[:15]),
+		SerialNumber: string(response[16:27]),
+		AssetNumber:  response[28:34],
+	}, nil
 }
 
-func (s *CCValidator) GetBillTable() ([]byte, error) {
+func (s *CCValidator) GetBillTable() ([]Bill, error) {
 	sendRequest(s.port, 0x41, []byte{})
-	return readResponse(s.port)
+	response, err := readResponse(s.port)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var bills []Bill
+
+	for i := 0; i < 24; i++ {
+		first := response[i*5]
+		countryCode := string(response[i*5+1 : i*5+4])
+		secondByte := response[i*5+5]
+
+		second := 0
+		if secondByte > 0x80 {
+			second = -int(secondByte - 0x80)
+		} else {
+			second = int(secondByte)
+		}
+
+		bill := Bill{Denomination: float64(first) * math.Pow(10, float64(second)), CountryCode: countryCode}
+		bills = append(bills, bill)
+	}
+
+	return bills, nil
+}
+
+func (s *CCValidator) EnableBillTypes(enabled []uint, escrow []uint) error {
+	enabledBytes := []byte{0, 0, 0}
+	escrowBytes := []byte{0, 0, 0}
+
+	for _, t := range enabled {
+		pos := 23 - t
+		enabledBytes[pos/8] |= 1 << (7 - pos + pos/8*8)
+	}
+
+	for _, t := range escrow {
+		pos := 23 - t
+		escrowBytes[pos/8] |= 1 << (7 - pos + pos/8*8)
+	}
+
+	sendRequest(s.port, 0x34, append(enabledBytes, escrowBytes...))
+
+	_, err := readResponse(s.port)
+	return err
 }
 
 func (s *CCValidator) Ack() ([]byte, error) {
