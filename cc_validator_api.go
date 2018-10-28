@@ -19,6 +19,60 @@ const (
 	Baud19200 Baud = 19200
 )
 
+type Status byte
+
+const (
+	PowerUp                   Status = 0x10
+	PowerUpWithBillValidator  Status = 0x11
+	PowerUpWithBillStacker    Status = 0x12
+	Initialize                Status = 0x13
+	Idling                    Status = 0x14
+	Accepting                 Status = 0x15
+	Stacking                  Status = 0x17
+	Returning                 Status = 0x18
+	UnitDisabled              Status = 0x19
+	Holding                   Status = 0x1A
+	DeviceBusy                Status = 0x1B
+	Rejecting                 Status = 0x1C
+	DropCassetteFull          Status = 0x41
+	DropCassetteOutOfPosition Status = 0x42
+	ValidatorJammed           Status = 0x43
+	DropCassetteJammed        Status = 0x44
+	Cheated                   Status = 0x45
+	GenericFailure            Status = 0x47
+	EscrowPosition            Status = 0x80
+	BillStacked               Status = 0x81
+	BillReturned              Status = 0x82
+)
+
+//Rejecting Codes
+const (
+	DueToInsertion          byte = 0x60
+	DueToMagnetic           byte = 0x61
+	DueToRemainedBillInHead byte = 0x62
+	DueToMultiplying        byte = 0x63
+	DueToConveying          byte = 0x64
+	DueToIdentification1    byte = 0x65
+	DueToVerification       byte = 0x66
+	DueToOptic              byte = 0x67
+	DueToInhibit            byte = 0x68
+	DueToCapacity           byte = 0x69
+	DueToOperation          byte = 0x6A
+	DueToLength             byte = 0x6C
+)
+
+//Failure Codes
+const (
+	StackMotorFailure            byte = 0x50
+	TransportMotorSpeedFailure   byte = 0x51
+	TransportMotorFailure        byte = 0x52
+	AligningMotorFailure         byte = 0x53
+	InitialCassetteStatusFailure byte = 0x54
+	OpticCanalFailure            byte = 0x55
+	MagneticCanalFailure         byte = 0x56
+	CapacitanceCanalFailure      byte = 0x5F
+)
+
 type CCValidator struct {
 	config *serial.Config
 	port   *serial.Port
@@ -61,9 +115,16 @@ func (s *CCValidator) SetSecurity(data []byte) ([]byte, error) {
 	return readResponse(s.port)
 }
 
-func (s *CCValidator) Poll() ([]byte, error) {
+func (s *CCValidator) Poll() (Status, byte, error) {
 	sendRequest(s.port, 0x33, []byte{})
-	return readResponse(s.port)
+	response, err := readResponse(s.port)
+
+	param := byte(0)
+	if len(response) > 1 {
+		param = response[1]
+	}
+
+	return Status(response[0]), param, err
 }
 
 func (s *CCValidator) Identification() ([]byte, error) {
@@ -75,7 +136,6 @@ func (s *CCValidator) GetBillTable() ([]byte, error) {
 	sendRequest(s.port, 0x41, []byte{})
 	return readResponse(s.port)
 }
-
 
 func (s *CCValidator) Ack() ([]byte, error) {
 	sendRequest(s.port, 0x00, []byte{})
@@ -140,7 +200,7 @@ func readResponse(port *serial.Port) ([]byte, error) {
 	}
 
 	if len(buf) == 4 && buf[3] == 0x00 {
-		fmt.Printf("<- %X\n",buf)
+		fmt.Printf("<- %X\n", buf)
 		return nil, nil // TODO Ack
 	}
 
@@ -154,7 +214,7 @@ func readResponse(port *serial.Port) ([]byte, error) {
 
 	buf = buf[3:]
 
-	fmt.Printf("<- %X\n",buf)
+	fmt.Printf("<- %X\n", buf)
 	Ack(port)
 
 	return buf, nil
@@ -181,7 +241,7 @@ func sendRequest(port *serial.Port, commandCode byte, bytesData ...[]byte) {
 	crc := GetCRC16(buf.Bytes())
 
 	binary.Write(buf, binary.LittleEndian, crc)
-	fmt.Printf("-> %X\n",buf.Bytes())
+	fmt.Printf("-> %X\n", buf.Bytes())
 
 	port.Write(buf.Bytes())
 }

@@ -1,10 +1,11 @@
 package cc_validator_api_test
 
 import (
-	api "cc_validator_api"
 	"fmt"
 	"testing"
 	"time"
+
+	api "cc_validator_api"
 )
 
 func TestCanReadCard(t *testing.T) {
@@ -16,36 +17,35 @@ func TestCanReadCard(t *testing.T) {
 		return
 	}
 
+	status, _, er := c.Poll() // get status
 
-	b,er := c.Poll() // get status
-
-	if b[0] == byte(0x19) {
+	if status == api.UnitDisabled {
 
 	}
 
-	b,er = c.Identification()
-	b,er = c.GetBillTable()
-	b, er = c.Poll() // initialization
+	_, er = c.Identification()
+	_, er = c.GetBillTable()
+	status, _, er = c.Poll() // initialization
 
 	if er != nil {
 		fmt.Println(er)
 		return
 	}
-	if b[0] != 0x13 {
+	if status != api.Idling {
 		fmt.Println("can not initialize")
 		return
 	}
 
 	for {
 		time.Sleep(time.Second * 1)
-		b, e := c.Poll()
+		status, param, e := c.Poll()
 
 		if e != nil {
 			fmt.Println(e)
 			break
 		}
 
-		fmt.Sprintf("+%v", b)
+		fmt.Sprintf("%X %X", status, param)
 	}
 
 }

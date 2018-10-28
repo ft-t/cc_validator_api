@@ -3,12 +3,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/howeyc/crc16"
-  packages = ["."]
-  revision = "2b2a61e366a66d3efb279e46176e7291001e0354"
-
-[[projects]]
-  branch = "master"
   name = "github.com/tarm/serial"
   packages = ["."]
   revision = "98f6abe2eb07edd42f6dfa2a934aea469acc29b7"
@@ -22,6 +16,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "fc70f8436a11369c122047eb07c6336239eb705b5c943dfaec2f6c911c848297"
+  inputs-digest = "f9a6c4dc440e8e3650be246784e2d7235f7da18d7cda545e30bdaca21f549100"
   solver-name = "gps-cdcl"
   solver-version = 1
