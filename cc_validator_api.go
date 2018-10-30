@@ -150,9 +150,18 @@ func (s *CCValidator) GetStatus() ([]uint, []uint, error) {
 	return enabledBills, securityBills, nil
 }
 
-func (s *CCValidator) SetSecurity(data []byte) ([]byte, error) {
-	sendRequest(s.port, 0x32, data)
-	return readResponse(s.port)
+func (s *CCValidator) SetSecurity(security []byte) error {
+	securityBytes := []byte{0, 0, 0}
+
+	for _, t := range security {
+		pos := 23 - t
+		securityBytes[pos/8] |= 1 << (7 - pos + pos/8*8)
+	}
+
+	sendRequest(s.port, 0x32, securityBytes)
+
+	_, err := readResponse(s.port)
+	return err
 }
 
 func (s *CCValidator) Poll() (Status, byte, error) {
