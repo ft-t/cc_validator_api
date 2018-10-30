@@ -86,11 +86,12 @@ type Bill struct {
 }
 
 type CCValidator struct {
-	config *serial.Config
-	port   *serial.Port
+	config  *serial.Config
+	port    *serial.Port
+	logging bool
 }
 
-func NewConnection(path string, baud Baud) (CCValidator, error) {
+func NewConnection(path string, baud Baud, logging bool) (CCValidator, error) {
 	c := &serial.Config{Name: path, Baud: int(baud), ReadTimeout: 5 * time.Second} // TODO
 	o, err := serial.OpenPort(c)
 
@@ -102,25 +103,20 @@ func NewConnection(path string, baud Baud) (CCValidator, error) {
 
 	res.config = c
 	res.port = o
-
-	//_,err = res.Reset()
-	//
-	//if err != nil {
-	//	return res, err
-	//}
+	res.logging = logging
 
 	return res, nil
 }
 
 func (s *CCValidator) Reset() error {
-	sendRequest(s.port, 0x30, []byte{})
-	_, err := readResponse(s.port)
+	sendRequest(s, 0x30, []byte{})
+	_, err := readResponse(s)
 	return err
 }
 
 func (s *CCValidator) GetStatus() ([]uint, []uint, error) {
-	sendRequest(s.port, 0x31, []byte{})
-	response, err := readResponse(s.port)
+	sendRequest(s, 0x31, []byte{})
+	response, err := readResponse(s)
 
 	if err != nil {
 		return nil, nil, err
@@ -158,15 +154,15 @@ func (s *CCValidator) SetSecurity(security []byte) error {
 		securityBytes[pos/8] |= 1 << (7 - pos + pos/8*8)
 	}
 
-	sendRequest(s.port, 0x32, securityBytes)
+	sendRequest(s, 0x32, securityBytes)
 
-	_, err := readResponse(s.port)
+	_, err := readResponse(s)
 	return err
 }
 
 func (s *CCValidator) Poll() (Status, byte, error) {
-	sendRequest(s.port, 0x33, []byte{})
-	response, err := readResponse(s.port)
+	sendRequest(s, 0x33, []byte{})
+	response, err := readResponse(s)
 
 	param := byte(0)
 	if len(response) > 1 {
@@ -177,8 +173,8 @@ func (s *CCValidator) Poll() (Status, byte, error) {
 }
 
 func (s *CCValidator) Identification() (Identification, error) {
-	sendRequest(s.port, 0x37, []byte{})
-	response, err := readResponse(s.port)
+	sendRequest(s, 0x37, []byte{})
+	response, err := readResponse(s)
 
 	if err != nil {
 		return Identification{}, err
@@ -192,8 +188,8 @@ func (s *CCValidator) Identification() (Identification, error) {
 }
 
 func (s *CCValidator) GetBillTable() ([]Bill, error) {
-	sendRequest(s.port, 0x41, []byte{})
-	response, err := readResponse(s.port)
+	sendRequest(s, 0x41, []byte{})
+	response, err := readResponse(s)
 
 	if err != nil {
 		return nil, err
@@ -234,63 +230,63 @@ func (s *CCValidator) EnableBillTypes(enabled []uint, escrow []uint) error {
 		escrowBytes[pos/8] |= 1 << (7 - pos + pos/8*8)
 	}
 
-	sendRequest(s.port, 0x34, append(enabledBytes, escrowBytes...))
+	sendRequest(s, 0x34, append(enabledBytes, escrowBytes...))
 
-	_, err := readResponse(s.port)
+	_, err := readResponse(s)
 	return err
 }
 
 func (s *CCValidator) Stack() error {
-	sendRequest(s.port, 0x35, []byte{})
-	_, err := readResponse(s.port)
+	sendRequest(s, 0x35, []byte{})
+	_, err := readResponse(s)
 	return err
 }
 
 func (s *CCValidator) Return() error {
-	sendRequest(s.port, 0x36, []byte{})
-	_, err := readResponse(s.port)
+	sendRequest(s, 0x36, []byte{})
+	_, err := readResponse(s)
 	return err
 }
 
 func (s *CCValidator) Hold() error {
-	sendRequest(s.port, 0x38, []byte{})
-	_, err := readResponse(s.port)
+	sendRequest(s, 0x38, []byte{})
+	_, err := readResponse(s)
 	return err
 }
 
 func (s *CCValidator) GetCRC32() ([]byte, error) {
-	sendRequest(s.port, 0x51, []byte{})
-	return readResponse(s.port)
+	sendRequest(s, 0x51, []byte{})
+	return readResponse(s)
 }
 
 func (s *CCValidator) SetBarcodeParameters(format byte, numberOfCharacters byte) error {
-	sendRequest(s.port, 0x3A, []byte{format, numberOfCharacters})
-	_, err := readResponse(s.port)
+	sendRequest(s, 0x3A, []byte{format, numberOfCharacters})
+	_, err := readResponse(s)
 	return err
 }
 
 func (s *CCValidator) ExtractBarcodeData() ([]byte, error) {
-	sendRequest(s.port, 0x3A, []byte{})
-	return readResponse(s.port)
+	sendRequest(s, 0x3A, []byte{})
+	return readResponse(s)
 }
 
 func (s *CCValidator) Ack() error {
-	sendRequest(s.port, 0x00, []byte{})
-	_, err := readResponse(s.port)
+	sendRequest(s, 0x00, []byte{})
+	_, err := readResponse(s)
 	return err
 }
 
-func Ack(port *serial.Port) {
-	sendRequest(port, 0x00, []byte{})
+func Ack(s *CCValidator) {
+	sendRequest(s, 0x00, []byte{})
 }
 
 func (s *CCValidator) Nack() error {
-	sendRequest(s.port, 0xFF, []byte{})
-	_, err := readResponse(s.port)
+	sendRequest(s, 0xFF, []byte{})
+	_, err := readResponse(s)
 	return err
 }
 
-func readResponse(port *serial.Port) ([]byte, error) {
+func readResponse(v *CCValidator) ([]byte, error) {
 	var buf []byte
 	innerBuf := make([]byte, 256)
 
@@ -305,7 +301,7 @@ func readResponse(port *serial.Port) ([]byte, error) {
 			return nil, fmt.Errorf("Reads tries exceeded")
 		}
 
-		n, err := port.Read(innerBuf)
+		n, err := v.port.Read(innerBuf)
 
 		if err != nil {
 			return nil, err
@@ -339,7 +335,9 @@ func readResponse(port *serial.Port) ([]byte, error) {
 	}
 
 	if len(buf) == 4 && buf[3] == 0x00 {
-		fmt.Printf("<- %X\n", buf)
+		if v.logging {
+			fmt.Printf("<- %X\n", buf)
+		}
 		return nil, nil // TODO Ack
 	}
 
@@ -353,13 +351,16 @@ func readResponse(port *serial.Port) ([]byte, error) {
 
 	buf = buf[3:]
 
-	fmt.Printf("<- %X\n", buf)
-	Ack(port)
+	if v.logging {
+		fmt.Printf("<- %X\n", buf)
+	}
+
+	Ack(v)
 
 	return buf, nil
 }
 
-func sendRequest(port *serial.Port, commandCode byte, bytesData ...[]byte) {
+func sendRequest(v *CCValidator, commandCode byte, bytesData ...[]byte) {
 	buf := new(bytes.Buffer)
 
 	length := 6
@@ -380,9 +381,12 @@ func sendRequest(port *serial.Port, commandCode byte, bytesData ...[]byte) {
 	crc := GetCRC16(buf.Bytes())
 
 	binary.Write(buf, binary.LittleEndian, crc)
-	fmt.Printf("-> %X\n", buf.Bytes())
 
-	port.Write(buf.Bytes())
+	if v.logging {
+		fmt.Printf("-> %X\n", buf.Bytes())
+	}
+
+	v.port.Write(buf.Bytes())
 }
 
 func GetCRC16(bufData []byte) uint16 {
