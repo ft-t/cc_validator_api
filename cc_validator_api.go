@@ -240,18 +240,54 @@ func (s *CCValidator) EnableBillTypes(enabled []uint, escrow []uint) error {
 	return err
 }
 
-func (s *CCValidator) Ack() ([]byte, error) {
-	sendRequest(s.port, 0x00, []byte{})
+func (s *CCValidator) Stack() error {
+	sendRequest(s.port, 0x35, []byte{})
+	_, err := readResponse(s.port)
+	return err
+}
+
+func (s *CCValidator) Return() error {
+	sendRequest(s.port, 0x36, []byte{})
+	_, err := readResponse(s.port)
+	return err
+}
+
+func (s *CCValidator) Hold() error {
+	sendRequest(s.port, 0x38, []byte{})
+	_, err := readResponse(s.port)
+	return err
+}
+
+func (s *CCValidator) GetCRC32() ([]byte, error) {
+	sendRequest(s.port, 0x51, []byte{})
 	return readResponse(s.port)
+}
+
+func (s *CCValidator) SetBarcodeParameters(format byte, numberOfCharacters byte) error {
+	sendRequest(s.port, 0x3A, []byte{format, numberOfCharacters})
+	_, err := readResponse(s.port)
+	return err
+}
+
+func (s *CCValidator) ExtractBarcodeData() ([]byte, error) {
+	sendRequest(s.port, 0x3A, []byte{})
+	return readResponse(s.port)
+}
+
+func (s *CCValidator) Ack() error {
+	sendRequest(s.port, 0x00, []byte{})
+	_, err := readResponse(s.port)
+	return err
 }
 
 func Ack(port *serial.Port) {
 	sendRequest(port, 0x00, []byte{})
 }
 
-func (s *CCValidator) Nack() ([]byte, error) {
+func (s *CCValidator) Nack() error {
 	sendRequest(s.port, 0xFF, []byte{})
-	return readResponse(s.port)
+	_, err := readResponse(s.port)
+	return err
 }
 
 func readResponse(port *serial.Port) ([]byte, error) {
