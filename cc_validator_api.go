@@ -118,9 +118,36 @@ func (s *CCValidator) Reset() error {
 	return err
 }
 
-func (s *CCValidator) GetStatus() ([]byte, error) {
+func (s *CCValidator) GetStatus() ([]uint, []uint, error) {
 	sendRequest(s.port, 0x31, []byte{})
-	return readResponse(s.port)
+	response, err := readResponse(s.port)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var enabledBills []uint
+	var securityBills []uint
+
+	for b, v := range response[:3] {
+		shift := uint(16 - b*8)
+		for i := uint(0); i < 8; i++ {
+			if v&(1<<i) != 0 {
+				enabledBills = append(enabledBills, shift+7-i)
+			}
+		}
+	}
+
+	for b, v := range response[4:] {
+		shift := uint(16 - b*8)
+		for i := uint(0); i < 8; i++ {
+			if v&(1<<i) != 0 {
+				securityBills = append(securityBills, shift+7-i)
+			}
+		}
+	}
+
+	return enabledBills, securityBills, nil
 }
 
 func (s *CCValidator) SetSecurity(data []byte) ([]byte, error) {
