@@ -200,7 +200,7 @@ func (s *CCValidator) GetBillTable() ([]Bill, error) {
 	for i := 0; i < 24; i++ {
 		first := response[i*5]
 		countryCode := string(response[i*5+1 : i*5+4])
-		secondByte := response[i*5+5]
+		secondByte := response[i*5+4]
 
 		second := 0
 		if secondByte > 0x80 {
