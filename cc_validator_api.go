@@ -3,6 +3,7 @@ package cc_validator_api
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -89,6 +90,7 @@ type CCValidator struct {
 	config  *serial.Config
 	port    *serial.Port
 	logging bool
+	open    bool
 }
 
 func NewConnection(path string, baud Baud, logging bool) (CCValidator, error) {
@@ -104,18 +106,49 @@ func NewConnection(path string, baud Baud, logging bool) (CCValidator, error) {
 	res.config = c
 	res.port = o
 	res.logging = logging
+	res.open = true
 
 	return res, nil
 }
 
+func (s *CCValidator) Open() error {
+	p, err := serial.OpenPort(s.config)
+
+	if err != nil {
+		return err
+	}
+
+	s.port = p
+	s.open = true
+
+	return nil
+}
+
+func (s *CCValidator) Close() error {
+	err := s.port.Close()
+	s.open = false
+
+	return err
+}
+
 func (s *CCValidator) Reset() error {
-	sendRequest(s, 0x30, []byte{})
-	_, err := readResponse(s)
+	err := sendRequest(s, 0x30, []byte{})
+
+	if err != nil {
+		return err
+	}
+
+	_, err = readResponse(s)
 	return err
 }
 
 func (s *CCValidator) GetStatus() ([]uint, []uint, error) {
-	sendRequest(s, 0x31, []byte{})
+	err := sendRequest(s, 0x31, []byte{})
+
+	if err != nil {
+		return nil, nil, err
+	}
+
 	response, err := readResponse(s)
 
 	if err != nil {
@@ -154,14 +187,23 @@ func (s *CCValidator) SetSecurity(security []byte) error {
 		securityBytes[pos/8] |= 1 << (7 - pos + pos/8*8)
 	}
 
-	sendRequest(s, 0x32, securityBytes)
+	err := sendRequest(s, 0x32, securityBytes)
 
-	_, err := readResponse(s)
+	if err != nil {
+		return err
+	}
+
+	_, err = readResponse(s)
 	return err
 }
 
 func (s *CCValidator) Poll() (Status, byte, error) {
-	sendRequest(s, 0x33, []byte{})
+	err := sendRequest(s, 0x33, []byte{})
+
+	if err != nil {
+		return 0, 0, err
+	}
+
 	response, err := readResponse(s)
 
 	param := byte(0)
@@ -173,7 +215,12 @@ func (s *CCValidator) Poll() (Status, byte, error) {
 }
 
 func (s *CCValidator) Identification() (Identification, error) {
-	sendRequest(s, 0x37, []byte{})
+	err := sendRequest(s, 0x37, []byte{})
+
+	if err != nil {
+		return Identification{}, err
+	}
+
 	response, err := readResponse(s)
 
 	if err != nil {
@@ -188,7 +235,12 @@ func (s *CCValidator) Identification() (Identification, error) {
 }
 
 func (s *CCValidator) GetBillTable() ([]Bill, error) {
-	sendRequest(s, 0x41, []byte{})
+	err := sendRequest(s, 0x41, []byte{})
+
+	if err != nil {
+		return nil, err
+	}
+
 	response, err := readResponse(s)
 
 	if err != nil {
@@ -230,59 +282,103 @@ func (s *CCValidator) EnableBillTypes(enabled []uint, escrow []uint) error {
 		escrowBytes[pos/8] |= 1 << (7 - pos + pos/8*8)
 	}
 
-	sendRequest(s, 0x34, append(enabledBytes, escrowBytes...))
+	err := sendRequest(s, 0x34, append(enabledBytes, escrowBytes...))
 
-	_, err := readResponse(s)
+	if err != nil {
+		return err
+	}
+
+	_, err = readResponse(s)
 	return err
 }
 
 func (s *CCValidator) Stack() error {
-	sendRequest(s, 0x35, []byte{})
-	_, err := readResponse(s)
+	err := sendRequest(s, 0x35, []byte{})
+
+	if err != nil {
+		return err
+	}
+
+	_, err = readResponse(s)
 	return err
 }
 
 func (s *CCValidator) Return() error {
-	sendRequest(s, 0x36, []byte{})
-	_, err := readResponse(s)
+	err := sendRequest(s, 0x36, []byte{})
+
+	if err != nil {
+		return err
+	}
+
+	_, err = readResponse(s)
 	return err
 }
 
 func (s *CCValidator) Hold() error {
-	sendRequest(s, 0x38, []byte{})
-	_, err := readResponse(s)
+	err := sendRequest(s, 0x38, []byte{})
+
+	if err != nil {
+		return err
+	}
+
+	_, err = readResponse(s)
 	return err
 }
 
 func (s *CCValidator) GetCRC32() ([]byte, error) {
-	sendRequest(s, 0x51, []byte{})
+	err := sendRequest(s, 0x51, []byte{})
+
+	if err != nil {
+		return nil, err
+	}
+
 	return readResponse(s)
 }
 
 func (s *CCValidator) SetBarcodeParameters(format byte, numberOfCharacters byte) error {
-	sendRequest(s, 0x3A, []byte{format, numberOfCharacters})
-	_, err := readResponse(s)
+	err := sendRequest(s, 0x3A, []byte{format, numberOfCharacters})
+
+	if err != nil {
+		return err
+	}
+
+	_, err = readResponse(s)
 	return err
 }
 
 func (s *CCValidator) ExtractBarcodeData() ([]byte, error) {
-	sendRequest(s, 0x3A, []byte{})
+	err := sendRequest(s, 0x3A, []byte{})
+
+	if err != nil {
+		return nil, err
+	}
+
 	return readResponse(s)
 }
 
 func (s *CCValidator) Ack() error {
-	sendRequest(s, 0x00, []byte{})
-	_, err := readResponse(s)
+	err := sendRequest(s, 0x00, []byte{})
+
+	if err != nil {
+		return err
+	}
+
+	_, err = readResponse(s)
 	return err
 }
 
 func Ack(s *CCValidator) {
-	sendRequest(s, 0x00, []byte{})
+	_ = sendRequest(s, 0x00, []byte{})
 }
 
 func (s *CCValidator) Nack() error {
-	sendRequest(s, 0xFF, []byte{})
-	_, err := readResponse(s)
+	err := sendRequest(s, 0xFF, []byte{})
+
+	if err != nil {
+		return err
+	}
+
+	_, err = readResponse(s)
 	return err
 }
 
@@ -360,7 +456,11 @@ func readResponse(v *CCValidator) ([]byte, error) {
 	return buf, nil
 }
 
-func sendRequest(v *CCValidator, commandCode byte, bytesData ...[]byte) {
+func sendRequest(v *CCValidator, commandCode byte, bytesData ...[]byte) error {
+	if !v.open {
+		return errors.New("serial port is closed")
+	}
+
 	buf := new(bytes.Buffer)
 
 	length := 6
@@ -369,24 +469,25 @@ func sendRequest(v *CCValidator, commandCode byte, bytesData ...[]byte) {
 		length += len(b)
 	}
 
-	binary.Write(buf, binary.LittleEndian, StartCode)
-	binary.Write(buf, binary.LittleEndian, PeripheralAddress)
-	binary.Write(buf, binary.LittleEndian, byte(length))
-	binary.Write(buf, binary.LittleEndian, commandCode)
+	_ = binary.Write(buf, binary.LittleEndian, StartCode)
+	_ = binary.Write(buf, binary.LittleEndian, PeripheralAddress)
+	_ = binary.Write(buf, binary.LittleEndian, byte(length))
+	_ = binary.Write(buf, binary.LittleEndian, commandCode)
 
 	for _, data := range bytesData {
-		binary.Write(buf, binary.LittleEndian, data)
+		_ = binary.Write(buf, binary.LittleEndian, data)
 	}
 
 	crc := GetCRC16(buf.Bytes())
 
-	binary.Write(buf, binary.LittleEndian, crc)
+	_ = binary.Write(buf, binary.LittleEndian, crc)
 
 	if v.logging {
 		fmt.Printf("-> %X\n", buf.Bytes())
 	}
 
-	v.port.Write(buf.Bytes())
+	_, err := v.port.Write(buf.Bytes())
+	return err
 }
 
 func GetCRC16(bufData []byte) uint16 {
