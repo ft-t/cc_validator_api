@@ -112,6 +112,10 @@ func NewConnection(path string, baud Baud, logging bool) (CCValidator, error) {
 }
 
 func (s *CCValidator) Open() error {
+	if s.open {
+		return errors.New("port already opened")
+	}
+
 	p, err := serial.OpenPort(s.config)
 
 	if err != nil {
@@ -125,6 +129,10 @@ func (s *CCValidator) Open() error {
 }
 
 func (s *CCValidator) Close() error {
+	if s.port == nil || !s.open {
+		return errors.New("port not opened")
+	}
+
 	err := s.port.Close()
 	s.open = false
 
