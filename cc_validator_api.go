@@ -440,7 +440,7 @@ func readResponse(v *CCValidator) ([]byte, error) {
 
 	if len(buf) == 4 && buf[3] == 0x00 {
 		if v.logging {
-			fmt.Printf("<- %X\n", buf)
+			fmt.Printf("validator[%v]: <- %X\n", v.config.Name, buf)
 		}
 		return nil, nil // TODO Ack
 	}
@@ -456,7 +456,7 @@ func readResponse(v *CCValidator) ([]byte, error) {
 	buf = buf[3:]
 
 	if v.logging {
-		fmt.Printf("<- %X\n", buf)
+		fmt.Printf("validator[%v]: <- %X\n", v.config.Name, buf)
 	}
 
 	Ack(v)
@@ -491,7 +491,7 @@ func sendRequest(v *CCValidator, commandCode byte, bytesData ...[]byte) error {
 	_ = binary.Write(buf, binary.LittleEndian, crc)
 
 	if v.logging {
-		fmt.Printf("-> %X\n", buf.Bytes())
+		fmt.Printf("validator[%v]:-> %X\n", v.config.Name, buf.Bytes())
 	}
 
 	_, err := v.port.Write(buf.Bytes())
