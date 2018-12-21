@@ -430,16 +430,8 @@ func readResponse(v *CCValidator) ([]byte, error) {
 	innerBuf := make([]byte, 256)
 
 	totalRead := 0
-	readTriesCount := 0
-	maxReadCount := 1050
 
 	for ; ; {
-		readTriesCount += 1
-
-		if readTriesCount >= maxReadCount {
-			return nil, fmt.Errorf("Reads tries exceeded")
-		}
-
 		n, err := v.port.Read(innerBuf)
 
 		if err != nil {
