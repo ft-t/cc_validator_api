@@ -91,10 +91,16 @@ type CCValidator struct {
 	port    *serial.Port
 	logging bool
 	open    bool
+	timeout int
 }
 
-func NewConnection(path string, baud Baud, logging bool) (CCValidator, error) {
-	c := &serial.Config{Name: path, Baud: int(baud), ReadTimeout: 5 * time.Second} // TODO
+type response struct {
+	data []byte
+	err  error
+}
+
+func NewConnection(path string, baud Baud, logging bool, timeout int) (CCValidator, error) {
+	c := &serial.Config{Name: path, Baud: int(baud), ReadTimeout: time.Duration(timeout) * time.Second}
 	o, err := serial.OpenPort(c)
 
 	res := CCValidator{}
@@ -146,7 +152,7 @@ func (s *CCValidator) Reset() error {
 		return err
 	}
 
-	_, err = readResponse(s)
+	_, err = readResponseWithTimeout(s)
 	return err
 }
 
@@ -157,7 +163,7 @@ func (s *CCValidator) GetStatus() ([]uint, []uint, error) {
 		return nil, nil, err
 	}
 
-	response, err := readResponse(s)
+	response, err := readResponseWithTimeout(s)
 
 	if err != nil {
 		return nil, nil, err
@@ -201,7 +207,7 @@ func (s *CCValidator) SetSecurity(security []byte) error {
 		return err
 	}
 
-	_, err = readResponse(s)
+	_, err = readResponseWithTimeout(s)
 	return err
 }
 
@@ -212,7 +218,7 @@ func (s *CCValidator) Poll() (Status, byte, error) {
 		return 0, 0, err
 	}
 
-	response, err := readResponse(s)
+	response, err := readResponseWithTimeout(s)
 
 	if err != nil {
 		return 0, 0, err
@@ -233,7 +239,7 @@ func (s *CCValidator) Identification() (Identification, error) {
 		return Identification{}, err
 	}
 
-	response, err := readResponse(s)
+	response, err := readResponseWithTimeout(s)
 
 	if err != nil {
 		return Identification{}, err
@@ -253,7 +259,7 @@ func (s *CCValidator) GetBillTable() ([]Bill, error) {
 		return nil, err
 	}
 
-	response, err := readResponse(s)
+	response, err := readResponseWithTimeout(s)
 
 	if err != nil {
 		return nil, err
@@ -300,7 +306,7 @@ func (s *CCValidator) EnableBillTypes(enabled []uint, escrow []uint) error {
 		return err
 	}
 
-	_, err = readResponse(s)
+	_, err = readResponseWithTimeout(s)
 	return err
 }
 
@@ -311,7 +317,7 @@ func (s *CCValidator) Stack() error {
 		return err
 	}
 
-	_, err = readResponse(s)
+	_, err = readResponseWithTimeout(s)
 	return err
 }
 
@@ -322,7 +328,7 @@ func (s *CCValidator) Return() error {
 		return err
 	}
 
-	_, err = readResponse(s)
+	_, err = readResponseWithTimeout(s)
 	return err
 }
 
@@ -333,7 +339,7 @@ func (s *CCValidator) Hold() error {
 		return err
 	}
 
-	_, err = readResponse(s)
+	_, err = readResponseWithTimeout(s)
 	return err
 }
 
@@ -344,7 +350,7 @@ func (s *CCValidator) GetCRC32() ([]byte, error) {
 		return nil, err
 	}
 
-	return readResponse(s)
+	return readResponseWithTimeout(s)
 }
 
 func (s *CCValidator) SetBarcodeParameters(format byte, numberOfCharacters byte) error {
@@ -354,7 +360,7 @@ func (s *CCValidator) SetBarcodeParameters(format byte, numberOfCharacters byte)
 		return err
 	}
 
-	_, err = readResponse(s)
+	_, err = readResponseWithTimeout(s)
 	return err
 }
 
@@ -365,7 +371,7 @@ func (s *CCValidator) ExtractBarcodeData() ([]byte, error) {
 		return nil, err
 	}
 
-	return readResponse(s)
+	return readResponseWithTimeout(s)
 }
 
 func (s *CCValidator) Ack() error {
@@ -375,7 +381,7 @@ func (s *CCValidator) Ack() error {
 		return err
 	}
 
-	_, err = readResponse(s)
+	_, err = readResponseWithTimeout(s)
 	return err
 }
 
@@ -390,8 +396,28 @@ func (s *CCValidator) Nack() error {
 		return err
 	}
 
-	_, err = readResponse(s)
+	_, err = readResponseWithTimeout(s)
 	return err
+}
+
+func timeout(timeout int, r chan response) {
+	time.Sleep(time.Duration(timeout) * time.Second)
+
+	r <- response{err: errors.New("timeout")}
+}
+
+func readResponseWithTimeout(s *CCValidator) ([]byte, error) {
+	inner := make(chan response)
+
+	go func() {
+		i, v := readResponse(s)
+		inner <- response{data: i, err: v}
+	}()
+	go timeout(s.timeout, inner)
+
+	v := <-inner
+
+	return v.data, v.err
 }
 
 func readResponse(v *CCValidator) ([]byte, error) {
