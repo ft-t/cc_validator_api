@@ -9,7 +9,7 @@ import (
 )
 
 func TestCanReadCard(t *testing.T) {
-	c, er := api.NewConnection("COM4", api.Baud9600)
+	c, er := api.NewConnection("COM4", api.Baud9600, true, 3 * time.Second)
 
 	//fmt.Println(r)
 	if er != nil {

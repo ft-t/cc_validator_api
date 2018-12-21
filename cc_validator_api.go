@@ -91,7 +91,7 @@ type CCValidator struct {
 	port    *serial.Port
 	logging bool
 	open    bool
-	timeout int
+	timeout time.Duration
 }
 
 type response struct {
@@ -99,8 +99,12 @@ type response struct {
 	err  error
 }
 
-func NewConnection(path string, baud Baud, logging bool, timeout int) (CCValidator, error) {
-	c := &serial.Config{Name: path, Baud: int(baud), ReadTimeout: time.Duration(timeout) * time.Second}
+func NewConnection(path string, baud Baud, logging bool, timeout time.Duration) (CCValidator, error) {
+	if timeout == 0 {
+		timeout = 3 * time.Second
+	}
+	
+	c := &serial.Config{Name: path, Baud: int(baud), ReadTimeout: timeout}
 	o, err := serial.OpenPort(c)
 
 	res := CCValidator{}
@@ -113,6 +117,7 @@ func NewConnection(path string, baud Baud, logging bool, timeout int) (CCValidat
 	res.port = o
 	res.logging = logging
 	res.open = true
+	res.timeout = timeout
 
 	return res, nil
 }
@@ -400,8 +405,8 @@ func (s *CCValidator) Nack() error {
 	return err
 }
 
-func timeout(timeout int, r chan response) {
-	time.Sleep(time.Duration(timeout) * time.Second)
+func timeout(timeout time.Duration, r chan response) {
+	time.Sleep(timeout)
 
 	r <- response{err: errors.New("timeout")}
 }
