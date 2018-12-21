@@ -214,6 +214,10 @@ func (s *CCValidator) Poll() (Status, byte, error) {
 
 	response, err := readResponse(s)
 
+	if err != nil {
+		return 0, 0, err
+	}
+
 	param := byte(0)
 	if len(response) > 1 {
 		param = response[1]
